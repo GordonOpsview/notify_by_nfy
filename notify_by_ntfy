@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Use the command: notify_by_nfy -u URL -t TOPIC -k TOKEN [-d]
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -u) shift; url="$1" ;;
+    -t) shift; topic="$1" ;;
+    -k) shift; token="$1" ;;
+    -d) debug=1 ;;
+  esac
+  shift
+done
+
+LOGFILE=/opt/opsview/monitoringscripts/var/log/notify_by_ntfy.log
+
+priority='default'   # Default to ntfy default
+message=''           # Default blank
+tag='question'       # UNKNOWN is default
+
+function gettag () {
+  case "$1" in
+    CRITICAL | FAILED | OFFLINE)
+      tag='exclamation'
+      priority='high'
+    ;;
+    UNKNOWN)
+      tag='question'
+    ;;
+    WARNING | IMPACTED | DOWN)
+      tag='warning'
+    ;;
+    OK | UP | RECOVERY | OPERATIONAL)
+      tag='white_check_mark'
+    ;;
+    DOWNTIME)
+      tag='zzz'
+    ;;
+  esac
+}
+
+if [[ -n $OPSVIEW_NAME ]]; then           # BSM notification
+  gettag "$OPSVIEW_STATETEXT"
+  message=${OPSVIEW_OUTPUT:-No output}
+elif [[ -n $NAGIOS_HOSTNAME ]]; then      # Host or service check notification
+  if [[ -n "$NAGIOS_SERVICEDESC" ]]; then # Service check
+    gettag "$NAGIOS_SERVICESTATE"
+    message="${NAGIOS_NOTIFICATIONTYPE:-UNKNOWN}: ${NAGIOS_SERVICEDESC:-UNKNOWN} on ${NAGIOS_HOSTNAME:-UNKNOWN} is ${NAGIOS_SERVICESTATE:-UNKNOWN}: ${NAGIOS_SERVICEOUTPUT:-UNKNOWN}"
+  else                                    # Host check
+    gettag "$NAGIOS_HOSTSTATE"
+    message="${NAGIOS_NOTIFICATIONTYPE:-UNKNOWN}: ${NAGIOS_HOSTNAME:-UNKNOWN} is ${NAGIOS_HOSTSTATE:-UNKNOWN}: ${NAGIOS_HOSTOUTPUT:-UNKNOWN}"
+  fi
+fi
+
+ret=$(curl -sL -H "Authorization: Bearer $token" -H "Title: Opsview" -H "Tags: $tag" -H "Priority: $priority" -d "$message" "$url/$topic")
+echo -n "ntfy API call to $url returned: $ret"
+
+if [[ $debug -eq 1 ]]; then
+  echo "$(date +"%Y-%m-%d %H:%M:%S") ntfy API call to $url returned: $ret" >> $LOGFILE
+fi
