@@ -24,7 +24,7 @@ function gettag () {
       tag='exclamation'
       priority='high'
     ;;
-    UNKNOWN)
+    UNKNOWN | UNREACHABLE )
       tag='question'
     ;;
     WARNING | IMPACTED | DOWN)
@@ -52,9 +52,13 @@ elif [[ -n $NAGIOS_HOSTNAME ]]; then      # Host or service check notification
   fi
 fi
 
-ret=$(curl -sL -H "Authorization: Bearer $token" -H "Title: Opsview" -H "Tags: $tag" -H "Priority: $priority" -d "$message" "$url/$topic")
-echo -n "ntfy API call to $url returned: $ret"
+output=$(curl -sL -H "Authorization: Bearer $token" -H "Title: Opsview" -H "Tags: $tag" -H "Priority: $priority" -d "$message" "$url/$topic")
+errcode=$?
+echo -n "ntfy API call to $url returned: $output" # To stdout
 
-if [[ $debug -eq 1 ]]; then
-  echo "$(date +"%Y-%m-%d %H:%M:%S") ntfy API call to $url returned: $ret" >> $LOGFILE
+## Logging
+if [[ $errcode -ne 0 ]]; then
+  echo "$(date +"%Y-%m-%d %H:%M:%S") [ERROR] - $url/$topic - $output" >> $LOGFILE
+elif [[ $debug -eq 1 ]]; then
+  echo "$(date +"%Y-%m-%d %H:%M:%S") [DEBUG] - $url/$topic - $output" >> $LOGFILE
 fi
